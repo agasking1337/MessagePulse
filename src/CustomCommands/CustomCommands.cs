@@ -59,7 +59,8 @@ public sealed class CustomCommandsHandler(
                 {
                     if (replyToCaller)
                     {
-                        ctx.Reply(processor.ProcessMessage(ctx.Sender, command.Message));
+                        foreach (var line in processor.SplitLines(processor.ProcessMessage(ctx.Sender, command.Message)))
+                            ctx.Reply(line);
                     }
                     else
                     {

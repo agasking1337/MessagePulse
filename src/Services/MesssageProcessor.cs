@@ -13,6 +13,8 @@ public sealed class MessageProcessor(ISwiftlyCore core, IPluginLogger logger, IT
     public IPlaceholderAPIv1? PlaceholderApi { get; set; }
     private static readonly Regex msgPulsePrefix = new(@"\{MP_PREFIX\}", RegexOptions.Compiled);
 
+    private static readonly Regex lineBreak = new(@"<br\s*/?>|\r?\n", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     /// <summary>Attaches the PlaceholderAPI to the message processor. And registers the 'mp_prefix' placeholder.</summary>
     public void AttachPlaceholderApi(IPlaceholderAPIv1 api)
     {
@@ -46,8 +48,17 @@ public sealed class MessageProcessor(ISwiftlyCore core, IPluginLogger logger, IT
     }
 
     /// <summary>Sends a message to a specific player.</summary>
-    public void SendToPlayer(IPlayer reciever, string message) =>
-        reciever.SendMessage(MessageType.Chat, ProcessMessage(reciever, message));
+    public void SendToPlayer(IPlayer reciever, string message)
+    {
+        var processed = ProcessMessage(reciever, message);
+
+        foreach (var line in SplitLines(processed))
+            reciever.SendMessage(MessageType.Chat, line);
+    }
+
+    /// <summary>Splits a message into non-empty lines on line break tags or newlines.</summary>
+    public IEnumerable<string> SplitLines(string message) =>
+        lineBreak.Split(message).Where(l => !string.IsNullOrWhiteSpace(l));
 
     /// <summary>Gets the translated message for a specific player.</summary>
     public string GetTranslatedMessage(string message, IPlayer? player) =>
