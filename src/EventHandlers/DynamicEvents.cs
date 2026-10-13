@@ -9,6 +9,7 @@ using SwiftlyS2.Shared.Players;
 using Config;
 using SwDevtools.Logging;
 using SwiftlyS2.Shared;
+using SwiftlyS2.Shared.Natives;
 using System.Collections.Concurrent;
 
 /// <summary>Handles dynamic events and sends messages to players based on configured rules.</summary>
@@ -213,6 +214,8 @@ public sealed class DynamicEvents
 
         // Get the player from the accessor using the key (player, attacker etc)
         player = method.Invoke(accessor, [key]) as IPlayer;
+        if (!IsUsable(player))
+            player = null;
 
         return player != null;
     }
@@ -323,7 +326,7 @@ public sealed class DynamicEvents
                 return $"{{{path}}}";
 
             current = method.Invoke(accessor, [key]);
-            if (current == null)
+            if (!IsUsable(current))
                 return string.Empty;
         }
         else
@@ -339,10 +342,10 @@ public sealed class DynamicEvents
         // --- Remaining nested parts ---
         for (var i = 1; i < parts.Length; i++)
         {
-            if (current == null)
+            if (!IsUsable(current))
                 return string.Empty;
 
-            var prop = current.GetType().GetProperty(parts[i],
+            var prop = current!.GetType().GetProperty(parts[i],
                 BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
             if (prop == null)
                 return $"{{{path}}}";
@@ -350,8 +353,21 @@ public sealed class DynamicEvents
             current = prop.GetValue(current);
         }
 
-        return current?.ToString() ?? string.Empty;
+        return IsUsable(current) ? current!.ToString() ?? string.Empty : string.Empty;
     }
+
+    /// <summary>
+    /// Native-backed objects (schema classes, players) can wrap a null/stale pointer (e.g. the accessor returns
+    /// a wrapper around address 0 for unresolved userid/attacker). Reading their fields dereferences native
+    /// memory and segfaults the server, so they must be validated first.
+    /// </summary>
+    private static bool IsUsable(object? value) => value switch
+    {
+        null => false,
+        INativeHandle handle => handle.IsValid,
+        IPlayer player => player.IsValid,
+        _ => true
+    };
 
 
     // ------------------------------
